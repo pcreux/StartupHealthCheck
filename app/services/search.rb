@@ -1,45 +1,40 @@
 class Search
   include Service
 
-  attr_reader :params
+  attr_reader :params, :query, :tags, :types
 
   def initialize(params)
     @params = params
+    @query = params[:query] || "*"
+    @tags = params[:tags] || nil
+    @types = params[:types] || nil
   end
 
   def call
-    shift_params if params[:type] || params[:tag]
     get_results
   end
 
   private
 
-  def shift_params
-    params[:type][:ids].shift unless params[:type].nil? || params[:type][:ids][0] != ""
-    params[:tag][:names].shift unless params[:tag].nil? || params[:tag][:names][0] != ""
+  def get_results
+    organizations + users
   end
 
-  def get_results
-    params[:type] && params[:type][:ids].any? ? types = params[:type][:ids] : types = false
-    params[:tag] && params[:tag][:names].any? ? tags = params[:tag][:names] : tags = false
-    !params[:query].empty? ? keyword = params[:query] : keyword = false unless params[:query].nil?
+  def organizations
+    Organization.search(query, conditions).results
+  end
 
-    if keyword && types && tags
-      Organization.search(keyword, where: {type_ids: types, tag_names: tags}).results + User.search(keyword, where: {tag_names: tags}).results
-    elsif keyword && types
-      Organization.search keyword, where: {type_ids: types}
-    elsif keyword && tags
-      Organization.search(keyword, where: {tag_names: tags}) + User.search(keyword, where: {tag_names: tags}).results
-    elsif types && tags
-      Organization.search("*", where: {type_ids: types, tag_names: tags}).results + User.search("*", where: {tag_names: tags}).results
-    elsif keyword
-      Organization.search(keyword).results + User.search(keyword).results
+  def users
+    User.search(query, conditions).results
+  end
+
+  def conditions
+    if tags
+      {where: {tag_names: tags}}
     elsif types
-      Organization.search "*", where: {type_ids: types}
-    elsif tags
-      Organization.search("*", where: {tag_names: tags}).results + User.search("*", where: {tag_names: tags}).results
-    else 
-      Organization.search("*").results + User.search("*").results
+      {where: {type_ids: types}}
+    else
+      {}
     end
   end
 end
